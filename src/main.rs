@@ -1,19 +1,28 @@
 use anyhow::anyhow;
-use serenity::async_trait;
-use serenity::model::channel::Message;
+use serenity::model::prelude::ReactionType;
+use serenity::{async_trait, model::prelude::Reaction};
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
 use shuttle_secrets::SecretStore;
-use tracing::{error, info};
+use tracing::{error, info, trace};
 
 struct Bot;
 
 #[async_trait]
 impl EventHandler for Bot {
-    async fn message(&self, ctx: Context, msg: Message) {
-        if msg.content == "!hello" {
-            if let Err(e) = msg.channel_id.say(&ctx.http, "world!").await {
-                error!("Error sending message: {:?}", e);
+    async fn reaction_add(&self, ctx: Context, reaction: Reaction) {
+        trace!("reaction_add: {:?}", reaction);
+        let channel = reaction.channel_id.to_channel(&ctx).await.unwrap();
+        if channel.clone().private().is_some() {
+            return;
+        }
+        let channel = channel.guild().unwrap();
+        if reaction.emoji.unicode_eq("📌") || channel.topic.unwrap_or("".into()).contains("Pin") {
+            let message = reaction.message(&ctx).await.unwrap();
+            let result = message.pin(&ctx).await;
+            if let Err(e) = result {
+                error!("Failed to pin message: {:?}", e);
+                message.react(&ctx, ReactionType::Unicode("❌".into())).await.ok();
             }
         }
     }
@@ -35,7 +44,7 @@ async fn serenity(
     };
 
     // Set gateway intents, which decides what events the bot will be notified about
-    let intents = GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT;
+    let intents = GatewayIntents::GUILD_MESSAGES | GatewayIntents::GUILD_MESSAGE_REACTIONS;
 
     let client = Client::builder(&token, intents)
         .event_handler(Bot)
