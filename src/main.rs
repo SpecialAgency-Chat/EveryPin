@@ -17,7 +17,7 @@ impl EventHandler for Bot {
             return;
         }
         let channel = channel.guild().unwrap();
-        if reaction.emoji.unicode_eq("📌") || channel.topic.unwrap_or("".into()).contains("Pin") {
+        if reaction.emoji.unicode_eq("📌") && channel.topic.unwrap_or("".into()).contains("Pin") {
             let message = reaction.message(&ctx).await.unwrap();
             let result = message.pin(&ctx).await;
             if let Err(e) = result {
